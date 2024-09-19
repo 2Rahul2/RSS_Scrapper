@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/2Rahul2/rssagg/internal/database"
 	"github.com/go-chi/chi"
@@ -19,6 +20,13 @@ type apiConfig struct {
 }
 
 func main() {
+	// feed, err := urlToFeed("https://wagslane.dev/index.xml")
+	// if err != nil {
+	// 	fmt.Println("ERR: ", err)
+	// 	log.Fatal("CLOSING")
+	// }
+	// fmt.Println(feed)
+
 	fmt.Println("Hello world")
 	godotenv.Load(".env")
 	portString := os.Getenv("PORT")
@@ -32,10 +40,12 @@ func main() {
 	}
 
 	connection, err := sql.Open("postgres", dbURL) //returns a connection and err
+	db := database.New(connection)
 	apiCfg := apiConfig{
-		DB: database.New(connection),
+		DB: db,
 	}
 
+	go startScrapping(db, 10, time.Minute)
 	if err != nil {
 		log.Fatal("Could not connect to database")
 	}
@@ -63,6 +73,8 @@ func main() {
 
 	V1router.Get("/feed-follows", apiCfg.middlewareAuth(apiCfg.handlerGetFeedFollow))
 	V1router.Delete("/feed-follows/{feedFollowId}", apiCfg.middlewareAuth(apiCfg.handlerDeleteFeedFollow))
+
+	V1router.Get("/posts", apiCfg.middlewareAuth(apiCfg.handlerGetPostsForUser))
 
 	router.Mount("/v1", V1router)
 	serve := &http.Server{
